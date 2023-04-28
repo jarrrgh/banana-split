@@ -1,17 +1,13 @@
-Example Extension
+Banana Split
 =================
 
-This is an example extension plug-in for Uranium. Uranium is the underlying framework used in Ultimaker Cura and NinjaKittens.
+Imagine splitting a banana neatly in half with quick swing of a katana. That's how easy it's now to split your model in Cura. Although technically splitting is not what actually happens. Here's how it works:
 
-The extension type plug-in is a "generic" type of plug-in that just gets some object constructed upon loading the plug-in for the first time. Using the initialisation of that class as starting point for your code, you can access all of the application.
+1. Position your model in a way that roughly half of the model goes below the print bed surface.
+2. Press Split button, and the tool will reflect anything below the surface on top of it.
+3. Move your original model along the Z axis to fine tune your cut real-time.
 
-There are two typical use cases for extensions:
-1. Modifying some behaviour in the application or modifying current functionality. This is done by listening to the desired event, such as the changing of the current machine or on start-up. When that event happens, some code can be executed that adds on the behaviour.
-2. Adding a dialogue that provides additional functionality. There is a handy built-in method that allows you to add a menu item easily, and what should happen when the user clicks on it.
-
-This plug-in shows an example of both use cases.
-
-Packaging
+Serving
 ---------
 
-To package your plug-in, compress your plug-in folder in a .zip archive and rename that archive to get the `.plugin` extension. These .plugin files can be dropped into any Uranium application to be installed.
+See the serve.sh for deployment. It works on my Mac at least. Update the PLUGINS_PATH to match the version of your Cura installation. Note: the deployment will shutdown any running Cura instances.

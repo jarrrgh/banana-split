@@ -1,9 +1,9 @@
 {
-    "name": "Example Extension",
-    "author": "Ultimaker",
+    "name": "Banana Split",
+    "author": "jarrrgh",
     "version": "1.0",
     "api": 6,
     "supported_sdk_versions": ["6.0.0", "7.0.0"],
-    "description": "Example extension to instruct people on how to create Uranium extensions.",
+    "description": "Split model with one easy action.",
     "catalog": "uranium"
 }

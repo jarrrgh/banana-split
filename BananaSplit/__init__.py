@@ -1,23 +1,18 @@
-# Copyright (c) 2017 Ultimaker B.V.
-# This example is released under the terms of the AGPLv3 or higher.
+# Copyright (c) 2023 jarrrgh.
+# This tool is released under the terms of the AGPLv3 or higher.
 
 from . import BananaSplit
 
-##  Defines additional metadata for the plug-in.
-#
-#   Some types of plug-ins require additional metadata, such as which file types
-#   they are able to read or the name of the tool they define. In the case of
-#   the "Extension" type plug-in, there is no additional metadata though.
 def getMetaData():
-    return {}
+    return {
+        "tool": {
+            "name": "BananaSplit",
+            "description": "Split model with one easy action.",
+            "icon": "split-icon.svg",
+            "tool_panel": "BananaSplit.qml",
+            "weight": 7
+        }
+    }
 
-##  Lets Uranium know that this plug-in exists.
-#
-#   This is called when starting the application to find out which plug-ins
-#   exist and what their types are. We need to return a dictionary mapping from
-#   strings representing plug-in types (in this case "extension") to objects
-#   that inherit from PluginObject.
-#
-#   \param app The application that the plug-in needs to register with.
 def register(app):
-    return {"extension": BananaSplit.BananaSplit()}
+    return {"tool": BananaSplit.BananaSplit()}
