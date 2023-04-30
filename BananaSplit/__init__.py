@@ -3,13 +3,19 @@
 
 from . import BananaSplit
 
+TOOL_PANEL = "qt6/BananaSplit.qml"
+try:
+    from PyQt6.QtCore import QT_VERSION_STR
+except ImportError:
+    TOOL_PANEL = "qt5/BananaSplit.qml"
+
 def getMetaData():
     return {
         "tool": {
             "name": "BananaSplit",
             "description": "Split model with one easy action.",
-            "icon": "split-icon.svg",
-            "tool_panel": "BananaSplit.qml",
+            "icon": "split.svg",
+            "tool_panel": TOOL_PANEL,
             "weight": 7
         }
     }

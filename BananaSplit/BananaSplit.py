@@ -1,35 +1,41 @@
 # Copyright (c) 2023 jarrrgh.
 # This tool is released under the terms of the AGPLv3 or higher.
 
-import os.path  # To find the QML files.
-import math
 import copy
-from typing import Optional
-from BananaSplit import SplitLinkDecorator
-
-from PyQt5.QtCore import pyqtProperty, pyqtSignal, Qt, QUrl, QObject, QVariant
-from PyQt5.QtQml import QQmlComponent, QQmlContext
-from UM.Application import Application
-from UM.Event import Event
-from UM.Logger import Logger
-from UM.Math.Float import Float
-from UM.Math.Matrix import Matrix
-from UM.Math.Vector import Vector
-from UM.Math.Quaternion import Quaternion
-from UM.PluginRegistry import PluginRegistry
-from UM.Scene.Selection import Selection
-from UM.Tool import Tool
-from UM.Operations.AddSceneNodeOperation import AddSceneNodeOperation
-from UM.Operations.MirrorOperation import MirrorOperation
-from UM.Operations.RotateOperation import RotateOperation
-from UM.Operations.TranslateOperation import TranslateOperation
-from UM.Operations.SetTransformOperation import SetTransformOperation
-from UM.Operations.GroupedOperation import GroupedOperation
-from UM.Scene.Iterator.DepthFirstIterator import DepthFirstIterator
-from UM.Scene.SceneNode import SceneNode
-from cura.Arranging.Nest2DArrange import arrange, createGroupOperationForArrange
-from UM.Scene.SceneNodeSettings import SceneNodeSettings
+from BananaSplit import ZeesawDecorator
 from cura.Scene import ZOffsetDecorator
+from math import pi
+from typing import Optional
+from UM.Scene.SceneNodeSettings import SceneNodeSettings
+from UM.Scene.SceneNode import SceneNode
+from UM.Operations.GroupedOperation import GroupedOperation
+from UM.Operations.TranslateOperation import TranslateOperation
+from UM.Operations.RotateOperation import RotateOperation
+from UM.Operations.AddSceneNodeOperation import AddSceneNodeOperation
+from UM.Tool import Tool
+from UM.Scene.Selection import Selection
+from UM.PluginRegistry import PluginRegistry
+from UM.Math.Quaternion import Quaternion
+from UM.Math.Vector import Vector
+from UM.Logger import Logger
+from UM.Version import Version
+from UM.Application import Application
+
+QT_VERSION = Version("6")
+try:
+    from PyQt6.QtCore import Qt, QObject, pyqtProperty, pyqtSignal, pyqtSlot, QUrl
+    from PyQt6.QtGui import QDesktopServices
+    from PyQt6.QtCore import QT_VERSION_STR
+    QT_VERSION = Version(QT_VERSION_STR)
+except ImportError:
+    from PyQt5.QtCore import Qt, QObject, pyqtProperty, pyqtSignal, pyqtSlot, QUrl
+    from PyQt5.QtGui import QDesktopServices
+    from PyQt5.QtCore import QT_VERSION_STR
+    QT_VERSION = Version(QT_VERSION_STR)
+
+APP_VERSION = Application.getInstance().getVersion()
+Logger.log("d", "App version: {}".format(APP_VERSION))
+Logger.log("d", "Qt version: {}".format(QT_VERSION))
 
 
 class BananaSplit(Tool):
@@ -37,25 +43,58 @@ class BananaSplit(Tool):
     def __init__(self):
         super().__init__()
 
-        self._shortcut_key = Qt.Key_B
+        # Shortcut
+        if QT_VERSION < Version("6"):
+            self._shortcut_key = Qt.Key_B
+        else:
+            self._shortcut_key = Qt.Key.Key_B
+
         self._split_allowed = False
+        self._linkable = False
+        self._unlinkable = False
+
+        self.setExposedProperties("Linkable", "Unlinkable")
+
+        Selection.selectionChanged.connect(self._selectionChanged)
+        Selection.selectionCenterChanged.connect(self._selectionCenterChanged)
 
         controller = Application.getInstance().getController()
-
-        # Selection.selectionChanged.connect(self.propertyChanged)
-        # Selection.selectionChanged.connect(self._selectionChanged)
-        Selection.selectionCenterChanged.connect(self._selectionCenterChanged)
         controller.toolOperationStopped.connect(self._onToolOperationStopped)
+    
+    def getLinkable(self) -> bool:
+        """True if node has zeesaw decorated and the link is disabled."""
+        return self._linkable
+  
+    def setLinkable(self, linkable: bool) -> None:
+        if linkable != self._linkable:
+            self._linkable = linkable
+            self.propertyChanged.emit()
+
+    def getUnlinkable(self) -> bool:
+        """True if node has been zeesaw decorated and the link is enabled."""
+        return self._unlinkable
+  
+    def setUnlinkable(self, unlinkable: bool) -> None:
+        if unlinkable != self._unlinkable:
+            self._unlinkable = unlinkable
+            self.propertyChanged.emit()
 
     def event(self, event):
         super().event(event)
 
     def split(self) -> None:
-        selected_nodes = Selection.getAllSelectedObjects()
-        if len(selected_nodes) == 1:
-            selected_node = selected_nodes[0]
+        selected_node = Selection.getSelectedObject(0)
+        if selected_node:
             new_node = copy.deepcopy(selected_node)
             new_node.setParent(selected_node.getParent())
+
+            if APP_VERSION >= Version("5.2.0"):
+                # Disable auto drop down. Makes things easier and fixes undo functionality
+                selected_node.setSetting(SceneNodeSettings.AutoDropDown, False)
+                new_node.setSetting(SceneNodeSettings.AutoDropDown, False)
+            else:
+                # Assist auto drop down to keep the node below platform surface
+                self._updateInverseZOffsetDecorator(selected_node, new_node)
 
             build_plate_number = selected_node.callDecoration(
                 "getBuildPlateNumber")
@@ -79,14 +118,12 @@ class BananaSplit(Tool):
             # Move new node next to the original node
             x = x + bbox.width + 2
 
-            # Assist auto drop down to keep the node below platform surface
-            self._updateInverseZOffsetDecorator(selected_node, new_node)
-
             # Cross-link nodes
-            self.link(selected_node, new_node)
+            self._addLinkDecorators(selected_node, new_node)
+            self.setUnlinkable(True)
 
             # Rotate 180 degrees. This turned out to be way faster than mirroring
-            rotation = Quaternion.fromAngleAxis(math.pi, Vector.Unit_Z)
+            rotation = Quaternion.fromAngleAxis(pi, Vector.Unit_Z)
 
             operation = GroupedOperation()
             operation.addOperation(AddSceneNodeOperation(
@@ -96,27 +133,66 @@ class BananaSplit(Tool):
                 new_node, Vector(x, y, z), set_position=True))
             operation.push()
 
-    def findLinkedNode(self, node) -> Optional[SceneNode]:
-        linked_node_id = node.callDecoration(
-            "getLinkedNodeId")
+    def updateZeesaw(self, selected_node, linked_node):
+        selected_world_position = selected_node.getWorldPosition()
+        linked_world_position = linked_node.getWorldPosition()
+        x = linked_world_position.x
+        y = -selected_world_position.y
+        z = linked_world_position.z
+
+        if APP_VERSION < Version("5.2.0"):
+            # Messes up undo, but at least works somewhat
+            auto_drop = Application.getInstance().getPreferences().getValue(
+                "physics/automatic_drop_down")
+            if auto_drop:
+                y = 0
+            self._updateInverseZOffsetDecorator(
+                selected_node, linked_node)
+
+        TranslateOperation(linked_node, Vector(
+            x, y, z), set_position=True).push()
+
+    def link(self):
+        selected_node = Selection.getSelectedObject(0)
+        if selected_node:
+            selected_node = Selection.getAllSelectedObjects()[0]
+            selected_node.callDecoration("setZeesawEnabled", True)
+            self.setUnlinkable(True)
+
+            linked_node = self._findLinkedNode(selected_node)
+            if linked_node:
+                linked_node.callDecoration("setZeesawEnabled", True)
+
+    def unlink(self):
+        selected_node = Selection.getSelectedObject(0)
+        if selected_node:
+            selected_node.callDecoration("setZeesawEnabled", False)
+            self.setLinkable(True)
+            
+            linked_node = self._findLinkedNode(selected_node)
+            if linked_node:
+                linked_node.callDecoration("setZeesawEnabled", False)
+
+    def _findLinkedNode(self, node) -> Optional[SceneNode]:
+        Logger.log("d", "_findLinkedNode")
+        linked_node_id = node.callDecoration("getZeesawLinkedNodeId")
         if linked_node_id:
-            Logger.log("d", "update self._linked_node")
+            Logger.log("d", "linked node id found")
             scene = Application.getInstance().getController().getScene()
             return scene.findObject(linked_node_id)
 
-    def link(self, node1, node2):
-        self.unlink(node1)
-        self.unlink(node2)
-        node1.addDecorator(SplitLinkDecorator.SplitLinkDecorator())
-        node2.addDecorator(SplitLinkDecorator.SplitLinkDecorator())
-        node1.callDecoration("setLinkedNodeId", id(node2))
-        node2.callDecoration("setLinkedNodeId", id(node1))
+    def _addLinkDecorators(self, node1, node2):
+        self._removeLinkDecorators(node1)
+        self._removeLinkDecorators(node2)
+        node1.addDecorator(ZeesawDecorator.ZeesawDecorator(id(node2)))
+        node2.addDecorator(ZeesawDecorator.ZeesawDecorator(id(node1)))
 
-    def unlink(self, node):
-        linked_node = self.findLinkedNode(node)
-        node.removeDecorator(SplitLinkDecorator.SplitLinkDecorator)
+    def _removeLinkDecorators(self, node):
+        linked_node = self._findLinkedNode(node)
+        node.removeDecorator(ZeesawDecorator.ZeesawDecorator)
         if linked_node:
-            linked_node.removeDecorator(SplitLinkDecorator.SplitLinkDecorator)
+            Logger.log("d", "linked node found. removing decorator")
+            linked_node.removeDecorator(ZeesawDecorator.ZeesawDecorator)
 
     def _updateInverseZOffsetDecorator(self, selected_node, linked_node):
         bbox = selected_node.getBoundingBox()
@@ -129,12 +205,11 @@ class BananaSplit(Tool):
             linked_node.callDecoration("setZOffset", z_offset)
 
     def _selectionChanged(self):
+        Logger.log("d", "_selectionChanged")
         split_allowed = False
 
-        selected_nodes = Selection.getAllSelectedObjects()
-
-        if len(selected_nodes) == 1:
-            selected_node = selected_nodes[0]
+        selected_node = Selection.getSelectedObject(0)
+        if selected_node:
             bbox = selected_node.getBoundingBox()
             if bbox.bottom < -0.1 and bbox.top > 0.1:
                 split_allowed = True
@@ -142,41 +217,23 @@ class BananaSplit(Tool):
         self._split_allowed = split_allowed
         Application.getInstance().getController().toolEnabledChanged.emit(
             self._plugin_id, split_allowed)
+        
+        
 
     def _selectionCenterChanged(self):
         self._selectionChanged()
 
     def _onToolOperationStopped(self, tool):
         if tool.getPluginId() == "TranslateTool":
-            selected_nodes = Selection.getAllSelectedObjects()
+            selected_node = Selection.getSelectedObject(0)
+            if selected_node and selected_node.callDecoration("isZeesawEnabled"):
+                Logger.log("d", "selected_node and selected_node.callDecoration(...)")
+                linked_node = self._findLinkedNode(selected_node)
 
-            if len(selected_nodes) == 1:
-                selected_node = selected_nodes[0]
-                linked_node = self.findLinkedNode(selected_node)
-
+                # Update "Z" of the linked node
                 if linked_node:
-                    selected_world_position = selected_node.getWorldPosition()
-                    linked_world_position = linked_node.getWorldPosition()
-                    x = linked_world_position.x
-                    y = -selected_world_position.y
-                    z = linked_world_position.z
-
-                    auto_drop = Application.getInstance().getPreferences().getValue(
-                        "physics/automatic_drop_down")
-
-                    # Application.getInstance().getPreferences().setValue(
-                    #     "physics/automatic_drop_down", False)
-
-                    self._updateInverseZOffsetDecorator(
-                        selected_node, linked_node)
-
-                    if auto_drop:
-                        # Assume ZOffsetDecorator will adjust y automatically
-                        TranslateOperation(linked_node, Vector(
-                            x, 0, z), set_position=True).push()
-                    else:
-                        TranslateOperation(linked_node, Vector(
-                            x, y, z), set_position=True).push()
+                    Logger.log("d", "linked node found. update zeesaw")
+                    self.updateZeesaw(selected_node, linked_node)
                 else:
-                    # Link broken so clean it up
-                    self.unlink(selected_node)
+                    # Link seems broken so clean it up
+                    self.removeLinkDecorators(selected_node)
