@@ -15,6 +15,7 @@ from UM.Operations.AddSceneNodeOperation import AddSceneNodeOperation
 from UM.Tool import Tool
 from UM.Scene.Selection import Selection
 from UM.PluginRegistry import PluginRegistry
+from UM.Math.Matrix import Matrix
 from UM.Math.Quaternion import Quaternion
 from UM.Math.Vector import Vector
 from UM.Logger import Logger
@@ -114,6 +115,17 @@ class BananaSplit(Tool):
             for child in new_node.getChildren():
                 child.callDecoration("setBuildPlateNumber", build_plate_number)
 
+            # Cross-link nodes
+            self._addLinkDecorators(selected_node, new_node)
+
+            operation = GroupedOperation()
+            operation.addOperation(AddSceneNodeOperation(
+                new_node, new_node.getParent()))
+
+            # Rotate 180 degrees. This turned out to be way faster than mirroring
+            rotation = Quaternion.fromAngleAxis(pi, Vector.Unit_Z)
+            operation.addOperation(RotateOperation(new_node, rotation))
+
             world_position = selected_node.getWorldPosition()
             bbox = selected_node.getBoundingBox()
             bbox_center = bbox.center
@@ -130,39 +142,44 @@ class BananaSplit(Tool):
             # Move new node next to the original node
             x = x + bbox.width + 2
 
-            # Cross-link nodes
-            self._addLinkDecorators(selected_node, new_node)
-            self._selectionChanged()
-
-            # Rotate 180 degrees. This turned out to be way faster than mirroring
-            rotation = Quaternion.fromAngleAxis(pi, Vector.Unit_Z)
-
-            operation = GroupedOperation()
-            operation.addOperation(AddSceneNodeOperation(
-                new_node, new_node.getParent()))
-            operation.addOperation(RotateOperation(new_node, rotation))
             operation.addOperation(TranslateOperation(
                 new_node, Vector(x, y, z), set_position=True))
             operation.push()
 
+            self._selectionChanged()
+
     def updateZeesaw(self, selected_node, linked_node):
-        selected_world_position = selected_node.getWorldPosition()
-        linked_world_position = linked_node.getWorldPosition()
-        x = linked_world_position.x
-        y = -selected_world_position.y
-        z = linked_world_position.z
+        # Target position
+        selected_position = selected_node.getWorldPosition()
+        linked_position = linked_node.getWorldPosition()
 
-        if APP_VERSION < Version("5.2.0"):
-            # Messes up undo, but at least works somewhat
-            auto_drop = Application.getInstance().getPreferences().getValue(
-                "physics/automatic_drop_down")
-            if auto_drop:
-                y = 0
-            self._updateInverseZOffsetDecorator(
-                selected_node, linked_node)
+        transformation = selected_node.getLocalTransformation()
+        world_transformation = selected_node.getWorldTransformation()
 
-        TranslateOperation(linked_node, Vector(
-            x, y, z), set_position=True).push()
+        # Rotate 180 degrees
+        rotation = Quaternion.fromAngleAxis(pi, Vector.Unit_Z)
+        orientation_matrix = rotation.toMatrix()
+        transformation.multiply(world_transformation.getInverse())
+        transformation.multiply(orientation_matrix)
+        transformation.multiply(world_transformation)
+        linked_node.setTransformation(transformation)
+
+        # Linked node position after rotation
+        current_world_position = linked_node.getWorldPosition()
+
+        transformation = linked_node.getLocalTransformation()
+        world_transformation = linked_node.getWorldTransformation()
+
+        # Translate back to orignal just possibly updating Z (actually Y)
+        target_position = Vector(
+            linked_position.x, -selected_position.y, linked_position.z)
+        translation = target_position - current_world_position
+        translation_matrix = Matrix()
+        translation_matrix.setByTranslation(translation)
+        transformation.multiply(world_transformation.getInverse())
+        transformation.multiply(translation_matrix)
+        transformation.multiply(world_transformation)
+        linked_node.setTransformation(transformation)
 
     def link(self):
         primary_node = Selection.getSelectedObject(0)
@@ -177,7 +194,6 @@ class BananaSplit(Tool):
         if selected_node:
             self._removeLinkDecorators(selected_node)
             self._selectionChanged()
-            
 
     def _findLinkedNode(self, node) -> Optional[SceneNode]:
         Logger.log("d", "_findLinkedNode")
@@ -253,11 +269,16 @@ class BananaSplit(Tool):
 
     def _selectionCenterChanged(self):
         self._selectionChanged()
+        # selected_node = Selection.getSelectedObject(0)
+        # if selected_node:
+        #     linked_node = self._findLinkedNode(selected_node)
+        #     if linked_node:
+        #         self.updateZeesaw(selected_node, linked_node)
 
     def _onToolOperationStopped(self, tool):
-        if tool.getPluginId() == "TranslateTool":
-            selected_node = Selection.getSelectedObject(0)
-            if selected_node:
-                linked_node = self._findLinkedNode(selected_node)
-                if linked_node:
-                    self.updateZeesaw(selected_node, linked_node)
+        # if tool.getPluginId() == "TranslateTool":
+        selected_node = Selection.getSelectedObject(0)
+        if selected_node:
+            linked_node = self._findLinkedNode(selected_node)
+            if linked_node:
+                self.updateZeesaw(selected_node, linked_node)
