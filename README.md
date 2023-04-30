@@ -1,7 +1,9 @@
 Banana Split
 =================
 
-Imagine splitting a banana neatly in half with quick swing of a katana. That's how easy it's now to split your model in Cura. Although technically splitting is not what actually happens. Here's how it works:
+Imagine splitting a banana neatly in half with quick swing of a katana. That's how easy it's now to split your model in Cura. Although technically splitting is not what really happens.
+
+The tool actually duplicates a selected model, flips it around, and then actively mirrors the Z value in relation to the print bed surface—sort of like a seesaw. Here's how to use it:
 
 1. Position your model in a way that roughly half of the model goes below the print bed surface.
 2. Press Split button, and the tool will reflect anything below the surface on top of it.
