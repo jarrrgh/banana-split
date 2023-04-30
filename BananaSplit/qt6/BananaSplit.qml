@@ -16,12 +16,12 @@ Item {
         UM.ToolbarButton {
             id: splitButton
             text: "Split"
+            enabled: UM.ActiveTool.properties.getValue("Splittable")
             toolItem: UM.ColorImage {
                 source: Qt.resolvedUrl("../resources/katana.svg")
                 color: UM.Theme.getColor("icon")
             }
             property bool needBorder: true
-            checkable: false
             onClicked: UM.ActiveTool.triggerAction("split")
         }
 
@@ -35,7 +35,6 @@ Item {
                 color: UM.Theme.getColor("icon")
             }
             property bool needBorder: true
-            checkable: false
             onClicked: UM.ActiveTool.triggerAction("link")
         }
 
@@ -48,7 +47,6 @@ Item {
                 color: UM.Theme.getColor("icon")
             }
             property bool needBorder: true
-            checkable: false
             onClicked: UM.ActiveTool.triggerAction("unlink")
         }
     }
