@@ -2,6 +2,7 @@
 # This tool is released under the terms of the AGPLv3 or higher.
 
 import copy
+import numpy
 from BananaSplit import ZeesawLinkDecorator
 from cura.Scene import ZOffsetDecorator
 from math import pi
@@ -54,6 +55,9 @@ class BananaSplit(Tool):
         self._linkable = False
         self._unlinkable = False
 
+        # Reference transformation to avoid unnecessary updates on linked nodes
+        self._previous_transformation = Matrix()
+
         self.setExposedProperties("Splittable", "Linkable", "Unlinkable")
 
         Selection.selectionChanged.connect(self._selectionChanged)
@@ -68,6 +72,7 @@ class BananaSplit(Tool):
 
     def setSplittable(self, splittable: bool) -> None:
         """Enabled/disable splitting."""
+        Logger.log("d", "setSplittable")
         if splittable != self._splittable:
             self._splittable = splittable
             self.propertyChanged.emit()
@@ -78,6 +83,7 @@ class BananaSplit(Tool):
 
     def setLinkable(self, linkable: bool) -> None:
         """Enabled/disable linking."""
+        Logger.log("d", "setLinkable")
         if linkable != self._linkable:
             self._linkable = linkable
             self.propertyChanged.emit()
@@ -88,6 +94,7 @@ class BananaSplit(Tool):
 
     def setUnlinkable(self, unlinkable: bool) -> None:
         """Enabled/disable unlinking."""
+        Logger.log("d", "setUnlinkable")
         if unlinkable != self._unlinkable:
             self._unlinkable = unlinkable
             self.propertyChanged.emit()
@@ -114,6 +121,9 @@ class BananaSplit(Tool):
             new_node.callDecoration("setBuildPlateNumber", build_plate_number)
             for child in new_node.getChildren():
                 child.callDecoration("setBuildPlateNumber", build_plate_number)
+
+            # Store reference transformation
+            self._previous_transformation = selected_node.getLocalTransformation()
 
             # Cross-link nodes
             self._addLinkDecorators(selected_node, new_node)
@@ -149,12 +159,23 @@ class BananaSplit(Tool):
             self._selectionChanged()
 
     def updateZeesaw(self, selected_node, linked_node):
+        Logger.log("d", "updateZeesaw")
+        transformation = selected_node.getLocalTransformation()
+        world_transformation = selected_node.getWorldTransformation()
+        
+        # Logger.log("d", "prev {}", self._previous_transformation.getData())
+        # Logger.log("d", "current {}", transformation.getData())
+
+        if numpy.allclose(transformation.getData(), self._previous_transformation.getData()):
+            Logger.log("d", "Transformation has not changed")
+            return
+        
+        Logger.log("d", "Transformation has changed")
+        self._previous_transformation = transformation.copy()
+
         # Target position
         selected_position = selected_node.getWorldPosition()
         linked_position = linked_node.getWorldPosition()
-
-        transformation = selected_node.getLocalTransformation()
-        world_transformation = selected_node.getWorldTransformation()
 
         # Rotate 180 degrees
         rotation = Quaternion.fromAngleAxis(pi, Vector.Unit_Z)
@@ -162,6 +183,7 @@ class BananaSplit(Tool):
         transformation.multiply(world_transformation.getInverse())
         transformation.multiply(orientation_matrix)
         transformation.multiply(world_transformation)
+        Logger.log("d", "update orientation")
         linked_node.setTransformation(transformation)
 
         # Linked node position after rotation
@@ -179,6 +201,7 @@ class BananaSplit(Tool):
         transformation.multiply(world_transformation.getInverse())
         transformation.multiply(translation_matrix)
         transformation.multiply(world_transformation)
+        Logger.log("d", "update translation")
         linked_node.setTransformation(transformation)
 
     def link(self):
@@ -204,12 +227,14 @@ class BananaSplit(Tool):
             return scene.findObject(linked_node_id)
 
     def _addLinkDecorators(self, node1, node2):
+        Logger.log("d", "_addLinkDecorators")
         self._removeLinkDecorators(node1)
         self._removeLinkDecorators(node2)
         node1.addDecorator(ZeesawLinkDecorator.ZeesawLinkDecorator(id(node2)))
         node2.addDecorator(ZeesawLinkDecorator.ZeesawLinkDecorator(id(node1)))
 
     def _removeLinkDecorators(self, node):
+        Logger.log("d", "_removeLinkDecorators")
         linked_node = self._findLinkedNode(node)
         node.removeDecorator(ZeesawLinkDecorator.ZeesawLinkDecorator)
         if linked_node:
@@ -218,6 +243,7 @@ class BananaSplit(Tool):
                 ZeesawLinkDecorator.ZeesawLinkDecorator)
 
     def _updateInverseZOffsetDecorator(self, selected_node, linked_node):
+        Logger.log("d", "_updateInverseZOffsetDecorator")
         bbox = selected_node.getBoundingBox()
         linked_node.removeDecorator(ZOffsetDecorator.ZOffsetDecorator)
         linked_node.addDecorator(ZOffsetDecorator.ZOffsetDecorator())
@@ -242,9 +268,10 @@ class BananaSplit(Tool):
             if linked_node:
                 unlinkable = True
             else:
+                Logger.log("d", "_selectionChanged orphan. remove decorators")
                 if selected_node.hasDecoration("getZeesawLinkedNodeId"):
                     # Link seems broken so clean it up
-                    self.removeLinkDecorators(selected_node)
+                    self._removeLinkDecorators(selected_node)
 
                 bbox = selected_node.getBoundingBox()
                 if bbox.bottom < -0.1 and bbox.top > 0.1:
@@ -268,17 +295,13 @@ class BananaSplit(Tool):
         self.setUnlinkable(unlinkable)
 
     def _selectionCenterChanged(self):
-        self._selectionChanged()
-        # selected_node = Selection.getSelectedObject(0)
-        # if selected_node:
-        #     linked_node = self._findLinkedNode(selected_node)
-        #     if linked_node:
-        #         self.updateZeesaw(selected_node, linked_node)
-
-    def _onToolOperationStopped(self, tool):
-        # if tool.getPluginId() == "TranslateTool":
+        Logger.log("d", "_selectionCenterChanged")
         selected_node = Selection.getSelectedObject(0)
         if selected_node:
             linked_node = self._findLinkedNode(selected_node)
             if linked_node:
                 self.updateZeesaw(selected_node, linked_node)
+
+    def _onToolOperationStopped(self, tool):
+        Logger.log("d", "_onToolOperationStopped")
+        self._selectionChanged()
