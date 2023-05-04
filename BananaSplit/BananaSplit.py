@@ -25,19 +25,15 @@ from UM.Application import Application
 
 QT_VERSION = Version("6")
 try:
-    from PyQt6.QtCore import Qt, QObject, pyqtProperty, pyqtSignal, pyqtSlot, QUrl
-    from PyQt6.QtGui import QDesktopServices
-    from PyQt6.QtCore import QT_VERSION_STR
+    from PyQt6.QtCore import Qt, QT_VERSION_STR
     QT_VERSION = Version(QT_VERSION_STR)
 except ImportError:
-    from PyQt5.QtCore import Qt, QObject, pyqtProperty, pyqtSignal, pyqtSlot, QUrl
-    from PyQt5.QtGui import QDesktopServices
-    from PyQt5.QtCore import QT_VERSION_STR
+    from PyQt5.QtCore import Qt, QT_VERSION_STR
     QT_VERSION = Version(QT_VERSION_STR)
 
 APP_VERSION = Application.getInstance().getVersion()
-Logger.log("d", "App version: {}".format(APP_VERSION))
-Logger.log("d", "Qt version: {}".format(QT_VERSION))
+# Logger.log("d", "App version: {}".format(APP_VERSION))
+# Logger.log("d", "Qt version: {}".format(QT_VERSION))
 
 
 class BananaSplit(Tool):
@@ -72,7 +68,7 @@ class BananaSplit(Tool):
 
     def setSplittable(self, splittable: bool) -> None:
         """Enabled/disable splitting."""
-        Logger.log("d", "setSplittable")
+        self._debug("d", "setSplittable")
         if splittable != self._splittable:
             self._splittable = splittable
             self.propertyChanged.emit()
@@ -83,7 +79,7 @@ class BananaSplit(Tool):
 
     def setLinkable(self, linkable: bool) -> None:
         """Enabled/disable linking."""
-        Logger.log("d", "setLinkable")
+        self._debug("d", "setLinkable")
         if linkable != self._linkable:
             self._linkable = linkable
             self.propertyChanged.emit()
@@ -94,7 +90,7 @@ class BananaSplit(Tool):
 
     def setUnlinkable(self, unlinkable: bool) -> None:
         """Enabled/disable unlinking."""
-        Logger.log("d", "setUnlinkable")
+        self._debug("d", "setUnlinkable")
         if unlinkable != self._unlinkable:
             self._unlinkable = unlinkable
             self.propertyChanged.emit()
@@ -158,19 +154,38 @@ class BananaSplit(Tool):
 
             self._selectionChanged()
 
+    def link(self):
+        primary_node = Selection.getSelectedObject(0)
+        secondary_node = Selection.getSelectedObject(1)
+
+        if APP_VERSION >= Version("5.2.0"):
+            # Disable auto drop down. Makes things easier and fixes undo functionality
+            primary_node.setSetting(SceneNodeSettings.AutoDropDown, False)
+            secondary_node.setSetting(SceneNodeSettings.AutoDropDown, False)
+
+        if primary_node and secondary_node:
+            self._addLinkDecorators(primary_node, secondary_node)
+            self._selectionChanged()
+
+    def unlink(self):
+        selected_node = Selection.getSelectedObject(0)
+        if selected_node:
+            self._removeLinkDecorators(selected_node)
+            self._selectionChanged()
+
     def updateZeesaw(self, selected_node, linked_node):
-        Logger.log("d", "updateZeesaw")
+        self._debug("d", "updateZeesaw")
         transformation = selected_node.getLocalTransformation()
         world_transformation = selected_node.getWorldTransformation()
         
-        # Logger.log("d", "prev {}", self._previous_transformation.getData())
-        # Logger.log("d", "current {}", transformation.getData())
+        # self._debug("d", "prev {}", self._previous_transformation.getData())
+        # self._debug("d", "current {}", transformation.getData())
 
         if numpy.allclose(transformation.getData(), self._previous_transformation.getData()):
-            Logger.log("d", "Transformation has not changed")
+            self._debug("d", "Transformation has not changed")
             return
         
-        Logger.log("d", "Transformation has changed")
+        self._debug("d", "Transformation has changed")
         self._previous_transformation = transformation.copy()
 
         # Target position
@@ -183,7 +198,7 @@ class BananaSplit(Tool):
         transformation.multiply(world_transformation.getInverse())
         transformation.multiply(orientation_matrix)
         transformation.multiply(world_transformation)
-        Logger.log("d", "update orientation")
+        self._debug("d", "update orientation")
         linked_node.setTransformation(transformation)
 
         # Linked node position after rotation
@@ -201,49 +216,35 @@ class BananaSplit(Tool):
         transformation.multiply(world_transformation.getInverse())
         transformation.multiply(translation_matrix)
         transformation.multiply(world_transformation)
-        Logger.log("d", "update translation")
+        self._debug("d", "update translation")
         linked_node.setTransformation(transformation)
 
-    def link(self):
-        primary_node = Selection.getSelectedObject(0)
-        secondary_node = Selection.getSelectedObject(1)
-
-        if primary_node and secondary_node:
-            self._addLinkDecorators(primary_node, secondary_node)
-            self._selectionChanged()
-
-    def unlink(self):
-        selected_node = Selection.getSelectedObject(0)
-        if selected_node:
-            self._removeLinkDecorators(selected_node)
-            self._selectionChanged()
-
     def _findLinkedNode(self, node) -> Optional[SceneNode]:
-        Logger.log("d", "_findLinkedNode")
-        linked_node_id = node.callDecoration("getZeesawLinkedNodeId")
+        self._debug("d", "_findLinkedNode")
+        linked_node_id = node.callDecoration("zeesawLinkedNodeId")
         if linked_node_id:
-            Logger.log("d", "linked node id found")
+            self._debug("d", "linked node id found")
             scene = Application.getInstance().getController().getScene()
             return scene.findObject(linked_node_id)
 
     def _addLinkDecorators(self, node1, node2):
-        Logger.log("d", "_addLinkDecorators")
+        self._debug("d", "_addLinkDecorators")
         self._removeLinkDecorators(node1)
         self._removeLinkDecorators(node2)
         node1.addDecorator(ZeesawLinkDecorator.ZeesawLinkDecorator(id(node2)))
         node2.addDecorator(ZeesawLinkDecorator.ZeesawLinkDecorator(id(node1)))
 
     def _removeLinkDecorators(self, node):
-        Logger.log("d", "_removeLinkDecorators")
+        self._debug("d", "_removeLinkDecorators")
         linked_node = self._findLinkedNode(node)
         node.removeDecorator(ZeesawLinkDecorator.ZeesawLinkDecorator)
         if linked_node:
-            Logger.log("d", "linked node found. removing decorator")
+            self._debug("d", "linked node found. removing decorator")
             linked_node.removeDecorator(
                 ZeesawLinkDecorator.ZeesawLinkDecorator)
 
     def _updateInverseZOffsetDecorator(self, selected_node, linked_node):
-        Logger.log("d", "_updateInverseZOffsetDecorator")
+        self._debug("d", "_updateInverseZOffsetDecorator")
         bbox = selected_node.getBoundingBox()
         linked_node.removeDecorator(ZOffsetDecorator.ZOffsetDecorator)
         linked_node.addDecorator(ZOffsetDecorator.ZOffsetDecorator())
@@ -254,7 +255,7 @@ class BananaSplit(Tool):
             linked_node.callDecoration("setZOffset", z_offset)
 
     def _selectionChanged(self):
-        Logger.log("d", "_selectionChanged")
+        self._debug("d", "_selectionChanged")
         splittable = False
         linkable = False
         unlinkable = False
@@ -266,11 +267,14 @@ class BananaSplit(Tool):
             selected_node = Selection.getSelectedObject(0)
             linked_node = self._findLinkedNode(selected_node)
             if linked_node:
+                if not selected_node.hasDecoration("zeesawLinkedNodeId"):
+                    # Fix broken link
+                    self._addLinkDecorators(selected_node, linked_node)
                 unlinkable = True
             else:
-                Logger.log("d", "_selectionChanged orphan. remove decorators")
-                if selected_node.hasDecoration("getZeesawLinkedNodeId"):
-                    # Link seems broken so clean it up
+                self._debug("d", "_selectionChanged orphan. remove decorators")
+                if selected_node.hasDecoration("zeesawLinkedNodeId"):
+                    # Linked node missing so remove link
                     self._removeLinkDecorators(selected_node)
 
                 bbox = selected_node.getBoundingBox()
@@ -295,7 +299,7 @@ class BananaSplit(Tool):
         self.setUnlinkable(unlinkable)
 
     def _selectionCenterChanged(self):
-        Logger.log("d", "_selectionCenterChanged")
+        self._debug("d", "_selectionCenterChanged")
         selected_node = Selection.getSelectedObject(0)
         if selected_node:
             linked_node = self._findLinkedNode(selected_node)
@@ -303,5 +307,9 @@ class BananaSplit(Tool):
                 self.updateZeesaw(selected_node, linked_node)
 
     def _onToolOperationStopped(self, tool):
-        Logger.log("d", "_onToolOperationStopped")
+        self._debug("d", "_onToolOperationStopped")
         self._selectionChanged()
+
+    def _debug(self, log_type: str, message: str, *args, **kwargs):
+        #Logger.log(log_type, message, *args, **kwargs)
+        pass

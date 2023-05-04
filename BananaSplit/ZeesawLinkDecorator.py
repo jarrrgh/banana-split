@@ -9,7 +9,7 @@ class ZeesawLinkDecorator(SceneNodeDecorator):
         super().__init__()
         self._linked_node_id = node_id
 
-    def getZeesawLinkedNodeId(self) -> Optional[int]:
+    def zeesawLinkedNodeId(self) -> Optional[int]:
         return self._linked_node_id
 
     # Skip copying the node id as a way of breaking the link

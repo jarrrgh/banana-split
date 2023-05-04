@@ -12,7 +12,7 @@ except ImportError:
 def getMetaData():
     return {
         "tool": {
-            "name": "BananaSplit",
+            "name": "Banana Split",
             "description": "Split model with one easy action.",
             "icon": "split.svg",
             "tool_panel": TOOL_PANEL,
