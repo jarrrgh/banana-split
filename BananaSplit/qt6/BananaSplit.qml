@@ -28,26 +28,14 @@ Item {
         UM.ToolbarButton {
             id: linkButton
             text: "Link Z"
-            enabled: UM.ActiveTool.properties.getValue("Linkable")
-            visible: !UM.ActiveTool.properties.getValue("Unlinkable")
+            checked: UM.ActiveTool.properties.getValue("Zeesaw")
+            enabled: UM.ActiveTool.properties.getValue("Linked")
             toolItem: UM.ColorImage {
                 source: Qt.resolvedUrl("../resources/link.svg")
                 color: UM.Theme.getColor("icon")
             }
             property bool needBorder: true
-            onClicked: UM.ActiveTool.triggerAction("link")
-        }
-
-        UM.ToolbarButton {
-            id: unlinkButton
-            text: "Unlink Z"
-            visible: UM.ActiveTool.properties.getValue("Unlinkable")
-            toolItem: UM.ColorImage {
-                source: Qt.resolvedUrl("../resources/unlink.svg")
-                color: UM.Theme.getColor("icon")
-            }
-            property bool needBorder: true
-            onClicked: UM.ActiveTool.triggerAction("unlink")
+            onClicked: UM.ActiveTool.triggerAction(this.checked ? "disableZeesaw" : "enableZeesaw")
         }
     }
 }

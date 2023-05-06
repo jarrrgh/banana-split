@@ -1,3 +1,6 @@
+# Copyright (c) 2023 jarrrgh.
+# This tool is released under the terms of the AGPLv3 or higher.
+
 from typing import Optional
 from UM.Scene.SceneNodeDecorator import SceneNodeDecorator
 
