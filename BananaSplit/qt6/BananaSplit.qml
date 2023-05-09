@@ -18,10 +18,10 @@ Item {
             text: "Split"
             enabled: UM.ActiveTool.properties.getValue("Splittable")
             toolItem: UM.ColorImage {
-                source: Qt.resolvedUrl("../resources/katana.svg")
+                source: Qt.resolvedUrl("../resources/tanto.svg")
                 color: UM.Theme.getColor("icon")
             }
-            property bool needBorder: true
+            //property bool needBorder: true
             onClicked: UM.ActiveTool.triggerAction("split")
         }
 
@@ -34,7 +34,7 @@ Item {
                 source: Qt.resolvedUrl("../resources/link.svg")
                 color: UM.Theme.getColor("icon")
             }
-            property bool needBorder: true
+            //property bool needBorder: true
             onClicked: UM.ActiveTool.triggerAction(this.checked ? "disableZeesaw" : "enableZeesaw")
         }
     }
