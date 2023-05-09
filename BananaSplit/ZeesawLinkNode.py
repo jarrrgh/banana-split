@@ -21,8 +21,10 @@ class ZeesawLinkNode(SceneNode):
 
         self._scene = Application.getInstance().getController().getScene()
         self._visible = False
+        self._preview = True
 
-        self._solid_mesh = None
+        self._link_mesh = None
+        self._bolt_mesh = None
         self._shader = None
         self.setCalculateBoundingBox(False)
         Application.getInstance().engineCreatedSignal.connect(self._onEngineCreated)
@@ -45,6 +47,11 @@ class ZeesawLinkNode(SceneNode):
         if enable != self.isEnabled():
             self._scene.sceneChanged.emit(self)
 
+    def setPreview(self, enable: bool):
+        if enable != self._preview:
+            self._preview = enable
+            self._scene.sceneChanged.emit(self)
+
     def setVisible(self, visible: bool) -> None:
         super().setVisible(visible)
         self._scene.sceneChanged.emit(self)
@@ -62,15 +69,13 @@ class ZeesawLinkNode(SceneNode):
         if active_camera:
             self.setOrientation(-active_camera.getOrientation())
 
-        if self._solid_mesh:
-            renderer.queueNode(self, mesh = self._solid_mesh, overlay = True, shader = self._shader)
+        if self._bolt_mesh and self._preview:
+            renderer.queueNode(self, mesh = self._bolt_mesh, overlay = True, shader = self._shader)
+        elif self._link_mesh:
+            renderer.queueNode(self, mesh = self._link_mesh, overlay = True, shader = self._shader)
 
         return True
-    
-    def buildMesh(self):
-        mesh = self._loadMesh("link.stl", 0.3)
-        self._solid_mesh = mesh
-        
+            
     def _loadMesh(self, filename: str, scale: float = 1.0):
         path = os.path.join(PluginRegistry.getInstance().getPluginPath("BananaSplit"), "resources", filename)
         reader = Application.getInstance().getMeshFileHandler().getReaderForFile(path)
@@ -79,7 +84,8 @@ class ZeesawLinkNode(SceneNode):
         return node.getMeshDataTransformed()
 
     def _onEngineCreated(self) -> None:
-        self.buildMesh()
+        self._link_mesh = self._loadMesh("link.stl", 0.3)
+        self._bolt_mesh = self._loadMesh("link-with-bolt.stl", 0.3)
 
     def _onSelectionCenterChanged(self) -> None:
         pass

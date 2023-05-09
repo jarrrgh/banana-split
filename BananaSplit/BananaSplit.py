@@ -2,14 +2,13 @@
 # This tool is released under the terms of the AGPLv3 or higher.
 
 from BananaSplit.ZeesawLinkDecorator import ZeesawLinkDecorator
-from BananaSplit.ZeesawLinkHandle import ZeesawLinkHandle
 from BananaSplit.ZeesawLinkNode import ZeesawLinkNode
 from BananaSplit.SetTransformationOperation import SetTransformationOperation
 from cura.Scene import ZOffsetDecorator
 from math import pi
 from typing import Optional
 from UM.Application import Application
-from UM.Event import Event, MouseEvent
+from UM.Event import Event
 from UM.Logger import Logger
 from UM.Math.Matrix import Matrix
 from UM.Math.Quaternion import Quaternion
@@ -18,10 +17,9 @@ from UM.Operations.AddSceneNodeOperation import AddSceneNodeOperation
 from UM.Operations.GroupedOperation import GroupedOperation
 from UM.Operations.RotateOperation import RotateOperation
 from UM.Operations.TranslateOperation import TranslateOperation
-from UM.Scene.SceneNodeSettings import SceneNodeSettings
 from UM.Scene.SceneNode import SceneNode
+from UM.Scene.SceneNodeSettings import SceneNodeSettings
 from UM.Scene.Selection import Selection
-from UM.Scene.ToolHandle import ToolHandle
 from UM.Tool import Tool
 from UM.Version import Version
 
@@ -52,15 +50,15 @@ class BananaSplit(Tool):
             self._shortcut_key = Qt.Key_B
         else:
             self._shortcut_key = Qt.Key.Key_B
-        
+
         # Little indicator to point out linked nodes
         self._clippy = ZeesawLinkNode()
 
-        # Allow/disallow splitting. Bound to the Split button.
+        # Allow/disallow splitting
         self._splittable = False
-        # Enable/disable zeesaw action. Bound to the Link Z button
+        # Enable/disable zeesaw action
         self._zeesaw = True
-        # Enable/disable instant zeesaw transformations. Bound to nothing currently
+        # Enable/disable instant zeesaw transformations
         self._preview = True
         # Linked evaluates True, if selected nodes have link decorators and they point to each other
         self._linked = False
@@ -73,7 +71,7 @@ class BananaSplit(Tool):
         self._committed_selected_transformation = None
         self._committed_linked_transformation = None
 
-        self.setExposedProperties("Splittable", "Linked", "Zeesaw")
+        self.setExposedProperties("Splittable", "Linked", "Zeesaw", "Preview")
 
         Selection.selectionChanged.connect(self._selectionChanged)
         Selection.selectionCenterChanged.connect(self._selectionCenterChanged)
@@ -93,7 +91,8 @@ class BananaSplit(Tool):
 
         if event.type == Event.ToolActivateEvent:
             if Selection.hasSelection() and self._clippy:
-                self._clippy.setParent(self.getController().getScene().getRoot())
+                self._clippy.setParent(
+                    self.getController().getScene().getRoot())
                 self._clippy.setEnabled(True)
 
         if event.type == Event.ToolDeactivateEvent and self._clippy:
@@ -108,20 +107,8 @@ class BananaSplit(Tool):
 
     def setSplittable(self, splittable: bool) -> None:
         """Enabled/disable splitting."""
-        Logger.debug("setSplittable {}".format(splittable))
         if splittable != self._splittable:
             self._splittable = splittable
-            self.propertyChanged.emit()
-
-    def getLinked(self) -> bool:
-        """True if selection is linked."""
-        return self._linked
-
-    def setLinked(self, linked: bool) -> None:
-        """Enabled/disable link"""
-        Logger.debug("setLinked {}".format(linked))
-        if linked != self._linked:
-            self._linked = linked
             self.propertyChanged.emit()
 
     def getZeesaw(self) -> bool:
@@ -130,9 +117,29 @@ class BananaSplit(Tool):
 
     def setZeesaw(self, enabled: bool) -> None:
         """Enable/disable zeesawing."""
-        Logger.debug("setZeesaw {}".format(enabled))
         if enabled != self._zeesaw:
             self._zeesaw = enabled
+            self.propertyChanged.emit()
+
+    def getPreview(self) -> bool:
+        """True if previewin enabled."""
+        return self._preview
+
+    def setPreview(self, enabled: bool) -> None:
+        """Enable/disable previewing."""
+        if enabled != self._preview:
+            self._clippy.setPreview(enabled)
+            self._preview = enabled
+            self.propertyChanged.emit()
+
+    def getLinked(self) -> bool:
+        """True if selection is linked."""
+        return self._linked
+
+    def setLinked(self, linked: bool) -> None:
+        """Enabled/disable link"""
+        if linked != self._linked:
+            self._linked = linked
             self.propertyChanged.emit()
 
     def enableZeesaw(self):
@@ -153,8 +160,17 @@ class BananaSplit(Tool):
             Logger.warning("Tried to enable zeesaw without a selected node.")
 
     def disableZeesaw(self):
+        """Disable zeesaw."""
         self.setZeesaw(False)
         self._selectionChanged()
+
+    def enablePreview(self):
+        """Enable preview."""
+        self.setPreview(True)
+
+    def disablePreview(self):
+        """Disable preview."""
+        self.setPreview(False)
 
     def split(self) -> None:
         selected_node = Selection.getSelectedObject(0)
@@ -249,7 +265,7 @@ class BananaSplit(Tool):
 
     def previewZeesaw(self, selected_node, linked_node, forced=False):
         """Update linked node transformation skipping the operation stack."""
-        #Logger.debug("previewZeesaw")
+        # Logger.debug("previewZeesaw")
         transformation = selected_node.getLocalTransformation()
         world_transformation = selected_node.getWorldTransformation()
 
@@ -288,30 +304,28 @@ class BananaSplit(Tool):
         linked_node.setTransformation(transformation)
 
     def _findLinkedNode(self, node) -> Optional[SceneNode]:
-        #Logger.debug("_findLinkedNode")
+        # Logger.debug("_findLinkedNode")
         linked_node_id = node.callDecoration("zeesawLinkedNodeId")
         if linked_node_id:
-            Logger.debug("linked node id found")
             scene = Application.getInstance().getController().getScene()
             return scene.findObject(linked_node_id)
 
     def _addLinkDecorators(self, node1, node2):
-        #Logger.debug("_addLinkDecorators")
+        # Logger.debug("_addLinkDecorators")
         self._removeLinkDecorators(node1)
         self._removeLinkDecorators(node2)
         node1.addDecorator(ZeesawLinkDecorator(id(node2)))
         node2.addDecorator(ZeesawLinkDecorator(id(node1)))
 
     def _removeLinkDecorators(self, node):
-        #Logger.debug("_removeLinkDecorators")
+        # Logger.debug("_removeLinkDecorators")
         linked_node = self._findLinkedNode(node)
         node.removeDecorator(ZeesawLinkDecorator)
         if linked_node:
-            Logger.debug("linked node found. removing decorator")
             linked_node.removeDecorator(ZeesawLinkDecorator)
 
     def _updateInverseZOffsetDecorator(self, selected_node, linked_node):
-        #Logger.debug("_updateInverseZOffsetDecorator")
+        # Logger.debug("_updateInverseZOffsetDecorator")
         bbox = selected_node.getBoundingBox()
         linked_node.removeDecorator(ZOffsetDecorator.ZOffsetDecorator)
         linked_node.addDecorator(ZOffsetDecorator.ZOffsetDecorator())
@@ -332,7 +346,7 @@ class BananaSplit(Tool):
                      "resources", filename)
 
     def _selectionChanged(self):
-        #Logger.debug("_selectionChanged")
+        # Logger.debug("_selectionChanged")
         self._clippy.setEnabled(self._zeesaw)
         splittable = False
         linked = False
@@ -376,7 +390,7 @@ class BananaSplit(Tool):
         self.setSplittable(splittable)
 
     def _selectionCenterChanged(self):
-        #Logger.debug("_selectionCenterChanged")
+        # Logger.debug("_selectionCenterChanged")
         selected_node = Selection.getSelectedObject(0)
         if selected_node:
             linked_node = self._findLinkedNode(selected_node)
@@ -393,7 +407,6 @@ class BananaSplit(Tool):
             if selected_node and self._linked and self._zeesaw:
                 linked_node = self._findLinkedNode(selected_node)
                 if linked_node:
-                    Logger.debug("store original transformations")
                     self._committed_selected_transformation = selected_node.getWorldTransformation()
                     self._committed_linked_transformation = linked_node.getWorldTransformation()
                     self._tool_operation_started = True
