@@ -64,22 +64,6 @@ Item {
                 }
             }
             
-            function triggerAction(mouse) {
-                if (mouse.button === Qt.RightButton) {
-                    console.log("right button clicked!")
-                } else if (mouse.button === Qt.LeftButton) {
-                    console.log("left button clicked!")
-                }
-                if (base.preview) {
-                    UM.ActiveTool.triggerAction("disablePreview");
-                    UM.ActiveTool.triggerAction("disableZeesaw");
-                } else if (base.zeesaw) {
-                    UM.ActiveTool.triggerAction("enablePreview");
-                } else {
-                    UM.ActiveTool.triggerAction("enableZeesaw");
-                }
-            }
-
             function selectIcon() {
                 if (base.preview) {
                     return boltIcon;

@@ -4,18 +4,22 @@
 from UM.Application import Application
 from UM.Math.Color import Color
 from UM.Math.Vector import Vector
+from UM.Mesh.MeshData import MeshData
 from UM.PluginRegistry import PluginRegistry
 from UM.Resources import Resources
 from UM.Scene.SceneNode import SceneNode
 from UM.View.GL.OpenGL import OpenGL
+
 import os
+from typing import Optional
+
 
 class ZeesawLinkNode(SceneNode):
     """Link indicator between two linked nodes. Only visible when a split node,
     linked node or both are selected.
     """
 
-    def __init__(self, parent = None):
+    def __init__(self, parent: Optional[SceneNode] = None) -> None:
         self._name = "ZeesawLinkNode"
         super().__init__(parent)
 
@@ -29,7 +33,7 @@ class ZeesawLinkNode(SceneNode):
         self.setCalculateBoundingBox(False)
         Application.getInstance().engineCreatedSignal.connect(self._onEngineCreated)
 
-    def updatePosition(self, selected_node, linked_node):
+    def updatePosition(self, selected_node: SceneNode, linked_node: SceneNode) -> None:
         s_bbox = selected_node.getBoundingBox()
         l_bbox = linked_node.getBoundingBox()
         y = max(s_bbox.top, l_bbox.top) + 3.0
@@ -39,15 +43,15 @@ class ZeesawLinkNode(SceneNode):
 
         if position == self.getWorldPosition():
             return
-        self.setPosition(position, transform_space = SceneNode.TransformSpace.World)
+        self.setPosition(position, transform_space=SceneNode.TransformSpace.World)
         self._scene.sceneChanged.emit(self)
 
-    def setEnabled(self, enable: bool):
+    def setEnabled(self, enable: bool) -> None:
         super().setEnabled(enable)
         if enable != self.isEnabled():
             self._scene.sceneChanged.emit(self)
 
-    def setPreview(self, enable: bool):
+    def setPreview(self, enable: bool) -> None:
         if enable != self._preview:
             self._preview = enable
             self._scene.sceneChanged.emit(self)
@@ -61,22 +65,24 @@ class ZeesawLinkNode(SceneNode):
             return True
 
         if not self._shader:
-            self._shader = OpenGL.getInstance().createShaderProgram(Resources.getPath(Resources.Shaders, "color.shader"))
+            self._shader = OpenGL.getInstance().createShaderProgram(
+                Resources.getPath(Resources.Shaders, "color.shader")
+            )
             self._shader.setUniformValue("u_color", Color(50, 130, 255, 255))
             self._shader.setUniformValue("u_opacity", 0)
-        
+
         active_camera = self._scene.getActiveCamera()
         if active_camera:
             self.setOrientation(-active_camera.getOrientation())
 
         if self._bolt_mesh and self._preview:
-            renderer.queueNode(self, mesh = self._bolt_mesh, overlay = True, shader = self._shader)
+            renderer.queueNode(self, mesh=self._bolt_mesh, overlay=True, shader=self._shader)
         elif self._link_mesh:
-            renderer.queueNode(self, mesh = self._link_mesh, overlay = True, shader = self._shader)
+            renderer.queueNode(self, mesh=self._link_mesh, overlay=True, shader=self._shader)
 
         return True
-            
-    def _loadMesh(self, filename: str, scale: float = 1.0):
+
+    def _loadMesh(self, filename: str, scale: float = 1.0) -> Optional[MeshData]:
         path = os.path.join(PluginRegistry.getInstance().getPluginPath("BananaSplit"), "resources", filename)
         reader = Application.getInstance().getMeshFileHandler().getReaderForFile(path)
         node = reader.read(path)
@@ -86,6 +92,3 @@ class ZeesawLinkNode(SceneNode):
     def _onEngineCreated(self) -> None:
         self._link_mesh = self._loadMesh("link.stl", 0.3)
         self._bolt_mesh = self._loadMesh("link-with-bolt.stl", 0.3)
-
-    def _onSelectionCenterChanged(self) -> None:
-        pass
