@@ -4,9 +4,11 @@
 from BananaSplit.ZeesawLinkDecorator import ZeesawLinkDecorator
 from BananaSplit.ZeesawLinkNode import ZeesawLinkNode
 from BananaSplit.SetTransformationOperation import SetTransformationOperation
+from cura.CuraApplication import CuraApplication
 from cura.Scene import ZOffsetDecorator
 from math import pi
 from typing import Optional, Tuple
+from PyQt6.QtCore import QTimer
 from UM.Application import Application
 from UM.Event import Event
 from UM.Logger import Logger
@@ -59,30 +61,26 @@ class BananaSplit(Tool):
         self._splittable = False
         # Enable/disable zeesaw action
         self._zeesaw = True
-        # Enable/disable instant zeesaw transformations
-        self._preview = True
+        # Enable/disable throttling zeesaw transformations
+        self._throttle = False
         # Linked evaluates True, if selected nodes have link decorators and they point to each other
         self._linked = False
-        # Keeps track of other tools performing opeartions
-        self._tool_operation_started = False
 
-        # Previous previewed transformation
-        self._previewed_selected_transformation = None
-        # Transformations before previewing
+        # Avoid unnecessary transformations by comparing to previous values
         self._committed_selected_transformation = None
         self._committed_linked_transformation = None
+        self._previous_selected_node = None
+        self._previous_selected_transformation = None
+        self._previous_selection_center = None
 
-        self.setExposedProperties("Splittable", "Linked", "Zeesaw", "Preview")
+        # Timer for throttling updates
+        self._update_timer = None
+
+        self.setExposedProperties("Splittable", "Linked", "Zeesaw", "Throttle")
 
         Selection.selectionChanged.connect(self._selectionChanged)
         Selection.selectionCenterChanged.connect(self._selectionCenterChanged)
-
-        # React to selection changes also through undo/redo
-        Application.getInstance().getOperationStack().changed.connect(self._selectionChanged)
-
-        self._controller = Application.getInstance().getController()
-        self._controller.toolOperationStarted.connect(self._onToolOperationStarted)
-        self._controller.toolOperationStopped.connect(self._onToolOperationStopped)
+        self.getController().getScene().sceneChanged.connect(self._sceneChanged)
 
     def event(self, event: Event) -> bool:
         super().event(event)
@@ -118,15 +116,14 @@ class BananaSplit(Tool):
             self._zeesaw = enabled
             self.propertyChanged.emit()
 
-    def getPreview(self) -> bool:
-        """True if previewin enabled."""
-        return self._preview
+    def getThrottle(self) -> bool:
+        """True if thorttling enabled."""
+        return self._throttle
 
-    def setPreview(self, enabled: bool) -> None:
-        """Enable/disable previewing."""
-        if enabled != self._preview:
-            self._clippy.setPreview(enabled)
-            self._preview = enabled
+    def setThrottle(self, enabled: bool) -> None:
+        """Enable/disable throttling."""
+        if enabled != self._throttle:
+            self._throttle = enabled
             self.propertyChanged.emit()
 
     def getLinked(self) -> bool:
@@ -146,10 +143,13 @@ class BananaSplit(Tool):
             linked_node = self._findLinkedNode(selected_node)
             if linked_node:
                 self.setZeesaw(True)
-                self._selectionChanged()
-                self._committed_linked_transformation = linked_node.getWorldTransformation()
+                self._updateProperties()
+
                 # If transformation did change, commit zeesaw operation to make it undoable (able to undo)
-                self.updateZeesaw(selected_node, linked_node, old_transformation=self._committed_linked_transformation)
+                self._committed_linked_transformation = linked_node.getWorldTransformation()
+                self.operateZeesaw(
+                    selected_node, linked_node, old_transformation=self._committed_linked_transformation
+                )
             else:
                 Logger.warning("Tried to enable zeesaw without a linked node.")
         else:
@@ -158,15 +158,7 @@ class BananaSplit(Tool):
     def disableZeesaw(self) -> None:
         """Disable zeesaw."""
         self.setZeesaw(False)
-        self._selectionChanged()
-
-    def enablePreview(self) -> None:
-        """Enable preview."""
-        self.setPreview(True)
-
-    def disablePreview(self) -> None:
-        """Disable preview."""
-        self.setPreview(False)
+        self._updateProperties()
 
     def split(self) -> None:
         selected_node = Selection.getSelectedObject(0)
@@ -174,54 +166,49 @@ class BananaSplit(Tool):
             new_node = copy.deepcopy(selected_node)
             new_node.setParent(selected_node.getParent())
 
-            if APP_VERSION >= Version("5.2.0"):
-                # Disable auto drop down. Makes things easier and fixes undo functionality
-                selected_node.setSetting(SceneNodeSettings.AutoDropDown, False)
-                new_node.setSetting(SceneNodeSettings.AutoDropDown, False)
-            else:
-                # Assist auto drop down to keep the node below platform surface
-                self._updateInverseZOffsetDecorator(selected_node, new_node)
-
             build_plate_number = selected_node.callDecoration("getBuildPlateNumber")
             new_node.callDecoration("setBuildPlateNumber", build_plate_number)
             for child in new_node.getChildren():
                 child.callDecoration("setBuildPlateNumber", build_plate_number)
 
             # Store reference transformation
-            self._previewed_selected_transformation = selected_node.getLocalTransformation()
+            self._previous_selected_transformation = selected_node.getLocalTransformation()
 
             # Cross-link nodes
             self._addLinkDecorators(selected_node, new_node)
 
             # Add node to the scene and perform the zeesaw transformations
-            self.updateZeesaw(selected_node, new_node, add_to_scene=True)
+            self.operateZeesaw(selected_node, new_node, add_to_scene=True)
 
             self._selectionChanged()
 
-    def updateZeesaw(
+    def operateZeesaw(
         self,
         selected_node: SceneNode,
         linked_node: SceneNode,
         add_to_scene: bool = False,
         old_transformation: Optional[Matrix] = None,
-    ) -> None:
-        """Update linked node transformation using transformation operations. User can undo these."""
+    ) -> bool:
+        """Update linked node transformation using transformation operations. User can undo this.
+        Returns True, if operation was pushed to stack, and False, if the operation would have not
+        made any difference to the linked node.
+        """
 
         # Store reference transformation
         transformation = selected_node.getLocalTransformation()
         world_transformation = selected_node.getWorldTransformation()
-        self._previewed_selected_transformation = world_transformation.copy()
+        self._previous_selected_transformation = world_transformation.copy()
 
         # Avoid unnecessary transformations, if reference has not changed
-        if self._transformationsClose(world_transformation, self._committed_selected_transformation):
-            return
+        if self._transformationsSamey(world_transformation, self._committed_selected_transformation):
+            return False
 
         # Preview, if zeesaw update would make a difference on the linked node
-        self.previewZeesaw(selected_node, linked_node, forced=True)
+        self.updateZeesaw(selected_node, linked_node, forced=True)
 
         # The result does differ slightly possibly due to rounding errors
-        if self._transformationsClose(linked_node.getWorldTransformation(), self._committed_linked_transformation):
-            return
+        if self._transformationsSamey(linked_node.getWorldTransformation(), self._committed_linked_transformation):
+            return False
 
         if APP_VERSION >= Version("5.2.0"):
             # Disable auto drop down. Makes things easier and fixes undo functionality
@@ -260,17 +247,20 @@ class BananaSplit(Tool):
         operation.addOperation(TranslateOperation(linked_node, Vector(x, y, z), set_position=True))
 
         operation.push()
+        return True
 
-    def previewZeesaw(self, selected_node: SceneNode, linked_node: SceneNode, forced: bool = False) -> None:
-        """Update linked node transformation skipping the operation stack."""
-        # Logger.debug("previewZeesaw")
+    def updateZeesaw(self, selected_node: SceneNode, linked_node: SceneNode, forced: bool = False) -> bool:
+        """Update linked node transformation skipping the operation stack. Returns True, if transformation
+        got updated, and False, if the operation would have not made any difference to the linked node.
+        """
+        # Logger.debug("updateZeesaw")
         transformation = selected_node.getLocalTransformation()
         world_transformation = selected_node.getWorldTransformation()
 
         if not forced:
-            if self._transformationsClose(world_transformation, self._previewed_selected_transformation):
-                return
-        self._previewed_selected_transformation = world_transformation.copy()
+            if self._transformationsSamey(world_transformation, self._previous_selected_transformation):
+                return False
+        self._previous_selected_transformation = world_transformation.copy()
 
         # Target position
         selected_position = selected_node.getWorldPosition()
@@ -299,6 +289,86 @@ class BananaSplit(Tool):
         transformation.multiply(translation_matrix)
         transformation.multiply(world_transformation)
         linked_node.setTransformation(transformation)
+
+        return True
+
+    def scheduleUpdate(self) -> None:
+        # Logger.debug("scheduleUpdate")
+        if self._throttle:
+            self._update_timer = QTimer()
+            self._update_timer.setInterval(1000)
+            self._update_timer.setSingleShot(True)
+            self._update_timer.timeout.connect(self._scheduledUpdate)
+            self._update_timer.start()
+        else:
+            self._scheduledUpdate()
+
+    def _scheduledUpdate(self) -> None:
+        # Logger.debug("_scheduledUpdate")
+        self._update_timer = None
+        selected_node, linked_node = self._getSelectedAndLinkedNode(0)
+        if selected_node and linked_node and self._zeesaw:
+            self.updateZeesaw(selected_node, linked_node)
+
+    def _sceneChanged(self, node: SceneNode) -> None:
+        # Logger.debug("_sceneChanged")
+        if self._update_timer:
+            return
+        if self._zeesaw and node.hasDecoration("zeesawLinkedNodeId"):
+            selected_node, linked_node = self._getSelectedAndLinkedNode(0)
+            if node is selected_node and linked_node and self._update_timer is None:
+                CuraApplication.getInstance().callLater(self.scheduleUpdate)
+
+    def _selectionChanged(self) -> None:
+        # Logger.debug("_selectionChanged")
+        self._updateProperties()
+        selected_node, linked_node = self._getSelectedAndLinkedNode(0)
+
+        if not selected_node:
+            self._previous_selected_node = None
+            return
+
+        # Selected node changed so update linked transformation in undoable manner
+        if self._zeesaw and linked_node and selected_node is not self._previous_selected_node:
+            self._committed_linked_transformation = linked_node.getWorldTransformation()
+            self.operateZeesaw(selected_node, linked_node, old_transformation=self._committed_linked_transformation)
+        self._previous_selected_node = selected_node
+
+    def _selectionCenterChanged(self) -> None:
+        # Logger.debug("_selectionCenterChanged")
+        selected_node, linked_node = self._getSelectedAndLinkedNode(0)
+        if selected_node and linked_node and self._zeesaw:
+            self._clippy.updatePosition(selected_node, linked_node)
+        self._updateProperties()
+
+    def _updateProperties(self) -> None:
+        # Logger.debug("_updateProperties")
+        self._clippy.setEnabled(self._zeesaw)
+        splittable = False
+        linked = False
+
+        selection_count = Selection.getCount()
+        primary_node, primary_linked_node = self._getSelectedAndLinkedNode(0)
+        secondary_node, secondary_linked_node = self._getSelectedAndLinkedNode(1)
+
+        if primary_node and primary_linked_node:
+            self._clippy.updatePosition(primary_node, primary_linked_node)
+
+        if selection_count == 1 and primary_node:
+            if primary_linked_node:
+                linked = True
+            else:
+                # Check if node is partly submerged in the build plate
+                bbox = primary_node.getBoundingBox()
+                if bbox.bottom < -0.1 and bbox.top > 0.1:
+                    splittable = True
+        elif selection_count == 2 and secondary_node and secondary_linked_node:
+            if primary_node is secondary_linked_node and secondary_node is primary_linked_node:
+                linked = True
+
+        self._clippy.setVisible(linked and self._zeesaw)
+        self.setLinked(linked)
+        self.setSplittable(splittable)
 
     def _findLinkedNode(self, node: SceneNode) -> Optional[SceneNode]:
         # Logger.debug("_findLinkedNode")
@@ -332,7 +402,7 @@ class BananaSplit(Tool):
             z_offset = -(bbox.height + bbox.bottom)
             linked_node.callDecoration("setZOffset", z_offset)
 
-    def _transformationsClose(self, a: Matrix, b: Matrix) -> bool:
+    def _transformationsSamey(self, a: Matrix, b: Matrix) -> bool:
         if a and b:
             return numpy.allclose(a.getData(), b.getData(), rtol=1.0e-5, atol=1.0e-5)
         else:
@@ -351,63 +421,3 @@ class BananaSplit(Tool):
             # Fix broken link. Decorator may have been lost during undo/redo...
             self._addLinkDecorators(selected_node, linked_node)
         return (selected_node, linked_node)
-
-    def _selectionChanged(self) -> None:
-        # Logger.debug("_selectionChanged")
-        self._clippy.setEnabled(self._zeesaw)
-        splittable = False
-        linked = False
-
-        selection_count = Selection.getCount()
-        primary_node, primary_linked_node = self._getSelectedAndLinkedNode(0)
-        secondary_node, secondary_linked_node = self._getSelectedAndLinkedNode(1)
-
-        if primary_node and primary_linked_node:
-            self._clippy.updatePosition(primary_node, primary_linked_node)
-
-        if selection_count == 1 and primary_node:
-            if primary_linked_node:
-                linked = True
-            else:
-                # Check if node is partly submerged in the build plate
-                bbox = primary_node.getBoundingBox()
-                if bbox.bottom < -0.1 and bbox.top > 0.1:
-                    splittable = True
-        elif selection_count == 2 and secondary_node and secondary_linked_node:
-            if primary_node is secondary_linked_node and secondary_node is primary_linked_node:
-                linked = True
-
-        self._clippy.setVisible(linked and self._zeesaw)
-        self.setLinked(linked)
-        self.setSplittable(splittable)
-
-    def _selectionCenterChanged(self) -> None:
-        # Logger.debug("_selectionCenterChanged")
-        selected_node, linked_node = self._getSelectedAndLinkedNode(0)
-        if selected_node and linked_node:
-            self._clippy.updatePosition(selected_node, linked_node)
-            if self._zeesaw and self._preview and self._tool_operation_started:
-                self.previewZeesaw(selected_node, linked_node)
-
-    def _onToolOperationStarted(self, tool: Tool) -> None:
-        # Logger.debug("_onToolOperationStarted {}".format(tool.getPluginId()))
-        if tool.getPluginId() == "SelectionTool":
-            return
-        selected_node, linked_node = self._getSelectedAndLinkedNode(0)
-        if selected_node and linked_node and self._zeesaw:
-            self._committed_selected_transformation = selected_node.getWorldTransformation()
-            self._committed_linked_transformation = linked_node.getWorldTransformation()
-            self._tool_operation_started = True
-
-    def _onToolOperationStopped(self, tool: Tool) -> None:
-        # Logger.debug("_onToolOperationStopped {}".format(tool.getPluginId()))
-        if tool.getPluginId() == "SelectionTool":
-            return
-        selected_node, linked_node = self._getSelectedAndLinkedNode(0)
-        if selected_node and linked_node and self._zeesaw:
-            self._tool_operation_started = False
-            self.updateZeesaw(selected_node, linked_node, old_transformation=self._committed_linked_transformation)
-            self._committed_selected_transformation = None
-            self._committed_linked_transformation = None
-
-        self._selectionChanged()

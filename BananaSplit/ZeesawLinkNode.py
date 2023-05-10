@@ -1,6 +1,7 @@
 # Copyright (c) 2023 jarrrgh.
 # This tool is released under the terms of the AGPLv3 or higher.
 
+from typing import Optional
 from UM.Application import Application
 from UM.Math.Color import Color
 from UM.Math.Vector import Vector
@@ -11,7 +12,6 @@ from UM.Scene.SceneNode import SceneNode
 from UM.View.GL.OpenGL import OpenGL
 
 import os
-from typing import Optional
 
 
 class ZeesawLinkNode(SceneNode):
@@ -25,10 +25,8 @@ class ZeesawLinkNode(SceneNode):
 
         self._scene = Application.getInstance().getController().getScene()
         self._visible = False
-        self._preview = True
 
         self._link_mesh = None
-        self._bolt_mesh = None
         self._shader = None
         self.setCalculateBoundingBox(False)
         Application.getInstance().engineCreatedSignal.connect(self._onEngineCreated)
@@ -41,20 +39,9 @@ class ZeesawLinkNode(SceneNode):
         l_top_center = Vector(l_bbox.center.x, y, l_bbox.center.z)
         position = (s_top_center + l_top_center) / 2.0
 
-        if position == self.getWorldPosition():
+        if position.equals(self.getWorldPosition(), epsilon=1e-4):
             return
         self.setPosition(position, transform_space=SceneNode.TransformSpace.World)
-        self._scene.sceneChanged.emit(self)
-
-    def setEnabled(self, enable: bool) -> None:
-        super().setEnabled(enable)
-        if enable != self.isEnabled():
-            self._scene.sceneChanged.emit(self)
-
-    def setPreview(self, enable: bool) -> None:
-        if enable != self._preview:
-            self._preview = enable
-            self._scene.sceneChanged.emit(self)
 
     def setVisible(self, visible: bool) -> None:
         super().setVisible(visible)
@@ -75,9 +62,7 @@ class ZeesawLinkNode(SceneNode):
         if active_camera:
             self.setOrientation(-active_camera.getOrientation())
 
-        if self._bolt_mesh and self._preview:
-            renderer.queueNode(self, mesh=self._bolt_mesh, overlay=True, shader=self._shader)
-        elif self._link_mesh:
+        if self._link_mesh:
             renderer.queueNode(self, mesh=self._link_mesh, overlay=True, shader=self._shader)
 
         return True
@@ -91,4 +76,3 @@ class ZeesawLinkNode(SceneNode):
 
     def _onEngineCreated(self) -> None:
         self._link_mesh = self._loadMesh("link.stl", 0.3)
-        self._bolt_mesh = self._loadMesh("link-with-bolt.stl", 0.3)

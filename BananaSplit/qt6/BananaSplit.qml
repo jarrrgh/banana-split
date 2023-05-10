@@ -14,10 +14,11 @@ Item {
 
     property bool splittable: UM.ActiveTool.properties.getValue("Splittable") || false
     property bool linked: UM.ActiveTool.properties.getValue("Linked") || false
-    property bool preview: UM.ActiveTool.properties.getValue("Preview") || false
+    property bool throttle: UM.ActiveTool.properties.getValue("Throttle") || false
     property bool zeesaw: UM.ActiveTool.properties.getValue("Zeesaw") || false
     
     Row {
+        id: buttonRow
         spacing: UM.Theme.getSize("default_margin").width
 
         UM.ToolbarButton {
@@ -33,68 +34,33 @@ Item {
 
         UM.ToolbarButton {
             id: linkButton
-            text: base.preview ? "Link Z (Instant)" : "Link Z"
+            text: "Link Z"
             checked: base.zeesaw
             enabled: base.linked
-            toolItem: selectIcon()
-
-            MouseArea {
-                anchors.fill: parent
-                acceptedButtons: Qt.LeftButton | Qt.RightButton
-                onClicked: (mouse) => {
-                    if (mouse.button === Qt.RightButton) {
-                        if (base.preview) {
-                            UM.ActiveTool.triggerAction("disablePreview");
-                        } else if (base.zeesaw) {
-                            UM.ActiveTool.triggerAction("disableZeesaw");
-                        } else {
-                            UM.ActiveTool.triggerAction("enablePreview");
-                            UM.ActiveTool.triggerAction("enableZeesaw");
-                        }
-                    } else {
-                        if (base.preview) {
-                            UM.ActiveTool.triggerAction("disablePreview");
-                            UM.ActiveTool.triggerAction("disableZeesaw");
-                        } else if (base.zeesaw) {
-                            UM.ActiveTool.triggerAction("enablePreview");
-                        } else {
-                            UM.ActiveTool.triggerAction("enableZeesaw");
-                        }
-                    }
-                }
+            toolItem: UM.ColorImage {
+                source: Qt.resolvedUrl("../resources/link.svg")
+                color: UM.Theme.getColor("icon")
             }
-            
-            function selectIcon() {
-                if (base.preview) {
-                    return boltIcon;
-                } else if (base.zeesaw) {
-                    return linkIcon;
-                } else {
-                    return unlinkIcon;
-                }
-            }
-
-            Component {
-                id: unlinkIcon
-                UM.ColorImage {
-                    source: Qt.resolvedUrl("../resources/unlink.svg")
-                    color: UM.Theme.getColor("icon")
-                }
-            }
-            Component {
-                id: linkIcon
-                UM.ColorImage {
-                    source: Qt.resolvedUrl("../resources/link.svg")
-                    color: UM.Theme.getColor("icon")
-                }
-            }
-            Component {
-                id: boltIcon
-                UM.ColorImage {
-                    source: Qt.resolvedUrl("../resources/link-with-bolt.svg")
-                    color: UM.Theme.getColor("icon")
-                }
-            }
+            onClicked: this.checked ?
+                UM.ActiveTool.triggerAction("disableZeesaw") :
+                UM.ActiveTool.triggerAction("enableZeesaw")
         }
     }
+
+    UM.CheckBox
+        {
+            id: throttleCheckBox
+            anchors.top: buttonRow.bottom
+            anchors.topMargin: UM.Theme.getSize("default_margin").width
+            text: "Throttle updates"
+            checked: base.throttle
+            onClicked: UM.ActiveTool.setProperty("Throttle", checked)
+            // nextCheckState: function() {
+            //     const new_state = checkState !== Qt.Checked;
+            //     UM.ActiveTool.setProperty("AutoDropDown", new_state)
+            //     return new_state ? Qt.Checked : Qt.Unchecked
+            // }
+
+            //width: parent.width //Use a width instead of anchors to allow the flow layout to resolve positioning.
+        }
 }
