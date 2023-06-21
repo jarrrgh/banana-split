@@ -47,20 +47,12 @@ Item {
         }
     }
 
-    UM.CheckBox
-        {
-            id: throttleCheckBox
-            anchors.top: buttonRow.bottom
-            anchors.topMargin: UM.Theme.getSize("default_margin").width
-            text: "Throttle updates"
-            checked: base.throttle
-            onClicked: UM.ActiveTool.setProperty("Throttle", checked)
-            // nextCheckState: function() {
-            //     const new_state = checkState !== Qt.Checked;
-            //     UM.ActiveTool.setProperty("AutoDropDown", new_state)
-            //     return new_state ? Qt.Checked : Qt.Unchecked
-            // }
-
-            //width: parent.width //Use a width instead of anchors to allow the flow layout to resolve positioning.
-        }
+    UM.CheckBox {
+        id: throttleCheckBox
+        anchors.top: buttonRow.bottom
+        anchors.topMargin: UM.Theme.getSize("default_margin").width
+        text: "Throttle updates"
+        checked: base.throttle
+        onClicked: UM.ActiveTool.setProperty("Throttle", checked)
+    }
 }

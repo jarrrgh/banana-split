@@ -8,7 +8,6 @@ from cura.CuraApplication import CuraApplication
 from cura.Scene import ZOffsetDecorator
 from math import pi
 from typing import Optional, Tuple
-from PyQt6.QtCore import QTimer
 from UM.Application import Application
 from UM.Event import Event
 from UM.Logger import Logger
@@ -32,10 +31,12 @@ import numpy
 QT_VERSION = Version("6")
 try:
     from PyQt6.QtCore import Qt, QT_VERSION_STR
+    from PyQt6.QtCore import QTimer
 
     QT_VERSION = Version(QT_VERSION_STR)
 except ImportError:
     from PyQt5.QtCore import Qt, QT_VERSION_STR
+    from PyQt5.QtCore import QTimer
 
     QT_VERSION = Version(QT_VERSION_STR)
 

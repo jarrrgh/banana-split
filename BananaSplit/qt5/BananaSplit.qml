@@ -9,33 +9,48 @@ Item {
     id: base
     width: childrenRect.width
     height: childrenRect.height
+    
+    property bool splittable: UM.ActiveTool.properties.getValue("Splittable") || false
+    property bool linked: UM.ActiveTool.properties.getValue("Linked") || false
+    property bool throttle: UM.ActiveTool.properties.getValue("Throttle") || false
+    property bool zeesaw: UM.ActiveTool.properties.getValue("Zeesaw") || false
 
     Row {
+        id: buttonRow
+        spacing: UM.Theme.getSize("default_margin").width
+
         Button {
             id: splitButton
             text: "Split"
-            iconSource: "../resources/katana.svg")
+            enabled: base.splittable
+            iconSource: "../resources/tanto.svg"
+            property bool needBorder: true;
             style: UM.Theme.styles.tool_button
             onClicked: UM.ActiveTool.triggerAction("split")
+            z: 2;
         }
 
         Button {
             id: linkButton
             text: "Link Z"
-            enabled: UM.ActiveTool.properties.getValue("Linkable")
-            visible: !UM.ActiveTool.properties.getValue("Unlinkable")
+            enabled: base.linked
+            checked: base.zeesaw && !base.splittable
             iconSource: "../resources/link.svg"
+            property bool needBorder: true;
             style: UM.Theme.styles.tool_button;
-            onClicked: UM.ActiveTool.triggerAction("link")
+            onClicked: this.checked ?
+                UM.ActiveTool.triggerAction("disableZeesaw") :
+                UM.ActiveTool.triggerAction("enableZeesaw")
+            z: 1;
         }
+    }
 
-        Button {
-            id: unlinkButton
-            text: "Unlink Z"
-            visible: UM.ActiveTool.properties.getValue("Unlinkable")
-            iconSource: "../resources/unlink.svg"
-            style: UM.Theme.styles.tool_button;
-            onClicked: UM.ActiveTool.triggerAction("unlink")
-        }
+    CheckBox {
+        id: throttleCheckBox
+        anchors.top: buttonRow.bottom
+        anchors.topMargin: UM.Theme.getSize("default_margin").width
+        text: "Throttle updates"
+        checked: base.throttle
+        onClicked: UM.ActiveTool.setProperty("Throttle", checked)
     }
 }
