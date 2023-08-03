@@ -14,6 +14,7 @@ from UM.Logger import Logger
 from UM.Math.Matrix import Matrix
 from UM.Math.Quaternion import Quaternion
 from UM.Math.Vector import Vector
+from UM.Message import Message
 from UM.Operations.AddSceneNodeOperation import AddSceneNodeOperation
 from UM.Operations.GroupedOperation import GroupedOperation
 from UM.Operations.RotateOperation import RotateOperation
@@ -217,7 +218,16 @@ class BananaSplit(Tool):
             linked_node.setSetting(SceneNodeSettings.AutoDropDown, False)
         else:
             # Assist auto drop down to keep the node below platform surface
-            self._updateInverseZOffsetDecorator(selected_node, linked_node)
+            # self._updateInverseZOffsetDecorator(selected_node, linked_node)
+
+            # Just disable auto drop down altogether, since ZOffsetDecorator is hard to handle
+            app_preferences = Application.getInstance().getPreferences()
+            if app_preferences.getValue("physics/automatic_drop_down"):
+                Message(
+                    text='To avoid issues while positioning models below build plate "Automatically drop models to the build plate" function has been disabled. You may re-enable it under Preferences > General.',
+                    title="Auto Drop Disabled",
+                ).show()
+            app_preferences.setValue("physics/automatic_drop_down", False)
 
         operation = GroupedOperation()
 
