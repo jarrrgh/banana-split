@@ -1,6 +1,8 @@
 Banana Split
 =================
 
+<img width="96px" src="marketplace-icon.png" />
+
 Split model with one easy action. Imagine splitting a banana neatly in half with a quick swing of a katana. That's how easy it is. Although, technically splitting is not what is really happening...
 
 The tool actually duplicates a selected model, flips it around, and then actively mirrors the Z value in relation to the build plate—sort of like a [zeesaw](https://www.youtube.com/watch?v=iPxPK4d8FN4). Here's how to use it:
