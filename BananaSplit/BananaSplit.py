@@ -163,6 +163,16 @@ class BananaSplit(Tool):
         self._updateProperties()
 
     def split(self) -> None:
+        if APP_VERSION < Version("5.2.0"):
+            # Ask user to disable auto drop down altogether, since ZOffsetDecorator is hard to handle
+            app_preferences = Application.getInstance().getPreferences()
+            if app_preferences.getValue("physics/automatic_drop_down"):
+                Message(
+                    text='To avoid issues while positioning models below build plate, please disable "Automatically drop models to the build plate" under Preferences > General, or update to Cura 5.2.0 or newer.',
+                    title="Warning: Auto Drop Enabled",
+                ).show()
+                return
+
         selected_node = Selection.getSelectedObject(0)
         if selected_node:
             new_node = copy.deepcopy(selected_node)
@@ -218,16 +228,9 @@ class BananaSplit(Tool):
             linked_node.setSetting(SceneNodeSettings.AutoDropDown, False)
         else:
             # Assist auto drop down to keep the node below platform surface
+            # TODO: avoid auto drop issues with ZOffsetDecorator
             # self._updateInverseZOffsetDecorator(selected_node, linked_node)
-
-            # Just disable auto drop down altogether, since ZOffsetDecorator is hard to handle
-            app_preferences = Application.getInstance().getPreferences()
-            if app_preferences.getValue("physics/automatic_drop_down"):
-                Message(
-                    text='To avoid issues while positioning models below build plate "Automatically drop models to the build plate" function has been disabled. You may re-enable it under Preferences > General.',
-                    title="Auto Drop Disabled",
-                ).show()
-            app_preferences.setValue("physics/automatic_drop_down", False)
+            pass
 
         operation = GroupedOperation()
 

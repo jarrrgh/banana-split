@@ -22,9 +22,10 @@ Serve.sh is there just to make deployment a bit snappier. It's not pretty, but w
 
 TODO
 ---------
-- Ignore rotation along build plate (seems SceneNode.getOrientation() may have a bug, which makes this rather difficult)
-- Use Cura SDK/API to avoid compatibility issues in the future
+- Ignore rotation along build plate (seems SceneNode.getOrientation() may have a bug, which makes this rather difficult).
+- Use ZOffsetDecorator to avoid issues caused by auto dropping to build plate.
+- Use Cura SDK/API to avoid compatibility issues in the future.
 - Localizations...
-- An actual banana split
+- An actual banana split...
 
 <img width="300px" src="banana-split.jpg" title="Photo by Eiliv Aceron from Pexels: https://www.pexels.com/photo/banana-on-a-white-ceramic-plate-6895879/" />
