@@ -16,3 +16,10 @@ Serving
 Serve.sh is there just to make deployment a bit snappier. It's not pretty, but works on my Mac at least. Update the PLUGINS_PATH to match the version of your Cura installation and CURA_VERSION. Version can be also passed as parameter. Note: the deployment will shutdown any running Cura instances.
 
 Banana.stl used in experimenting by [booom](https://www.thingiverse.com/thing:2141725) [(CC BY 4.0)](https://creativecommons.org/licenses/by/4.0/).
+
+
+TODO
+---------
+- Ignore rotation along build plate (seems SceneNode.getOrientation() may have a bug, which makes this rather difficult)
+- Use Cura SDK/API to avoid compatibility issues in the future
+- Localizations
