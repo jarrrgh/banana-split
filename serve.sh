@@ -5,8 +5,8 @@ SCRIPT_DIR="$(dirname $0)"
 CURA_VERSION=$1
 echo "version now $CURA_VERSION"
 
-# Default to 5.3
-if [ -z "$CURA_VERSION" ]; then CURA_VERSION="5.3"; fi
+# Default to 5.4
+if [ -z "$CURA_VERSION" ]; then CURA_VERSION="5.4"; fi
 
 echo "Use Cura version $CURA_VERSION"
 
@@ -18,11 +18,12 @@ mkdir -p "$DEPLOY_PATH"
 
 echo
 echo "Prepare BananaSplit"
-zip -r "${SCRIPT_DIR}/BananaSplit.plugin" "${SCRIPT_DIR}/BananaSplit/" -x "*.DS_Store"
+rm -f "${SCRIPT_DIR}/BananaSplit.zip"
+zip -r "${SCRIPT_DIR}/BananaSplit.zip" "${SCRIPT_DIR}/BananaSplit/" -x "*.DS_Store"
 
 # echo
 echo "Serve BananaSplit"
-unzip -o "${SCRIPT_DIR}/BananaSplit.plugin" -d "$DEPLOY_PATH"
+unzip -o "${SCRIPT_DIR}/BananaSplit.zip" -d "$DEPLOY_PATH"
 
 echo
 echo "Restart Cura"
