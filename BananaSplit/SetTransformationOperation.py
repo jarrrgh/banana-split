@@ -22,11 +22,11 @@ class SetTransformationOperation(Operation):
         self._new_transformation = new_transformation
 
     def undo(self) -> None:
-        Logger.debug("undo {}".format(self))
+        #Logger.debug("undo {}".format(self))
         self._node.setTransformation(self._old_transformation)
 
     def redo(self) -> None:
-        Logger.debug("redo {}".format(self))
+        #Logger.debug("redo {}".format(self))
         self._node.setTransformation(self._new_transformation)
 
     def mergeWith(self, other: Operation) -> GroupedOperation:

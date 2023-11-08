@@ -152,10 +152,6 @@ class BananaSplit(Tool):
                 self.operateZeesaw(
                     selected_node, linked_node, old_transformation=self._committed_linked_transformation
                 )
-            else:
-                Logger.warning("Tried to enable zeesaw without a linked node.")
-        else:
-            Logger.warning("Tried to enable zeesaw without a selected node.")
 
     def disableZeesaw(self) -> None:
         """Disable zeesaw."""
