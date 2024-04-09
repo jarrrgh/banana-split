@@ -2,11 +2,13 @@
 
 SCRIPT_DIR="$(dirname $0)"
 
+DEFAULT_VERSION="5.7"
 CURA_VERSION=$1
 echo "version now $CURA_VERSION"
 
-# Default to 5.4
-if [ -z "$CURA_VERSION" ]; then CURA_VERSION="5.4"; fi
+if [ -z "$CURA_VERSION" ]; then
+    CURA_VERSION=$DEFAULT_VERSION
+fi
 
 echo "Use Cura version $CURA_VERSION"
 
@@ -33,7 +35,11 @@ if [[ $CURA_VERSION == 5* ]]; then
     sleep 1
 
     # Open Cura for debug 5.xx
-    /Applications/Ultimaker\ Cura.app/Contents/MacOS/UltiMaker-Cura --debug
+    if [[ $CURA_VERSION == "$DEFAULT_VERSION" ]]; then
+        /Applications/Ultimaker\ Cura.app/Contents/MacOS/UltiMaker-Cura --debug
+    else
+        ${HOME}/Tools/Ultimaker\ Cura\ ${CURA_VERSION}.app/Contents/MacOS/UltiMaker-Cura --debug
+    fi
     #open -b "nl.ultimaker.cura_UltiMaker_Cura_5.3.1"
 else
     killall cura
