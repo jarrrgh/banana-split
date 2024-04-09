@@ -6,6 +6,13 @@ from . import BananaSplit
 TOOL_PANEL = "qt6/BananaSplit.qml"
 try:
     from PyQt6.QtCore import QT_VERSION_STR
+
+    from UM.Application import Application
+    from UM.Version import Version
+
+    # 5.7.0 deprecated UM.ActiveTool
+    if Application.getInstance().getVersion() < Version("5.7.0"):
+        TOOL_PANEL = "qt6/BananaSplit_deprecated.qml"
 except ImportError:
     TOOL_PANEL = "qt5/BananaSplit.qml"
 

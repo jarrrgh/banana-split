@@ -12,10 +12,10 @@ Item {
     width: childrenRect.width
     height: childrenRect.height
 
-    property bool splittable: UM.Controller.properties.getValue("Splittable") || false
-    property bool linked: UM.Controller.properties.getValue("Linked") || false
-    property bool throttle: UM.Controller.properties.getValue("Throttle") || false
-    property bool zeesaw: UM.Controller.properties.getValue("Zeesaw") || false
+    property bool splittable: UM.ActiveTool.properties.getValue("Splittable") || false
+    property bool linked: UM.ActiveTool.properties.getValue("Linked") || false
+    property bool throttle: UM.ActiveTool.properties.getValue("Throttle") || false
+    property bool zeesaw: UM.ActiveTool.properties.getValue("Zeesaw") || false
     
     Row {
         id: buttonRow
@@ -29,7 +29,7 @@ Item {
                 source: Qt.resolvedUrl("../resources/tanto.svg")
                 color: UM.Theme.getColor("icon")
             }
-            onClicked: UM.Controller.triggerAction("split")
+            onClicked: UM.ActiveTool.triggerAction("split")
         }
 
         UM.ToolbarButton {
@@ -42,8 +42,8 @@ Item {
                 color: UM.Theme.getColor("icon")
             }
             onClicked: this.checked ?
-                UM.Controller.triggerAction("disableZeesaw") :
-                UM.Controller.triggerAction("enableZeesaw")
+                UM.ActiveTool.triggerAction("disableZeesaw") :
+                UM.ActiveTool.triggerAction("enableZeesaw")
         }
     }
 
@@ -53,6 +53,6 @@ Item {
         anchors.topMargin: UM.Theme.getSize("default_margin").width
         text: "Throttle updates"
         checked: base.throttle
-        onClicked: UM.Controller.setProperty("Throttle", checked)
+        onClicked: UM.ActiveTool.setProperty("Throttle", checked)
     }
 }
