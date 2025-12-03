@@ -1,7 +1,7 @@
 {
     "name": "Banana Split",
     "author": "jarrrgh",
-    "version": "1.0.3",
+    "version": "1.0.4",
     "api": 6,
     "supported_sdk_versions": [
         "6.0.0",
@@ -26,7 +26,10 @@
         "8.5.0",
         "8.6.0",
         "8.7.0",
-        "8.8.0"
+        "8.8.0",
+        "8.9.0",
+        "8.10.0",
+        "8.11.0"
     ],
     "description": "Split model with one easy action.",
     "catalog": "uranium"
